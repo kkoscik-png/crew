@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel administratora — Harmonogram załogi</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f6f8; --card: #ffffff; --text: #1b2430; --muted: #5b6675;
+    --border: #e1e5ea; --accent: #0a5c8a; --accent-2: #0e7fbf;
+    --ok: #0f7a3d; --ok-bg: #e6f6ec; --err: #b3261e; --err-bg: #fce8e6;
+    --shadow: 0 1px 3px rgba(20,30,40,0.08), 0 1px 2px rgba(20,30,40,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1620; --card: #17212c; --text: #e8edf2; --muted: #8fa0b3;
+      --border: #26333f; --accent: #4fb3e8; --accent-2: #6cc4f0;
+      --ok: #4ade80; --ok-bg: #123322; --err: #ff8a80; --err-bg: #3a1615;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px 16px 60px;
+  }
+  .wrap { max-width: 520px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 0.88rem; margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: var(--shadow); margin-bottom: 16px; }
+  label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+  input[type=password], input[type=file] {
+    width: 100%; font-size: 1rem; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); margin-bottom: 14px;
+  }
+  button {
+    background: var(--accent); color: white; border: none; padding: 11px 18px;
+    border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; width: 100%;
+  }
+  button:hover { background: var(--accent-2); }
+  button:disabled { opacity: .6; cursor: default; }
+  button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); font-weight: 500; margin-top: 8px; }
+  .msg { padding: 10px 14px; border-radius: 10px; font-size: 0.9rem; margin-bottom: 14px; }
+  .msg.ok { background: var(--ok-bg); color: var(--ok); }
+  .msg.err { background: var(--err-bg); color: var(--err); }
+  .rows { display: grid; gap: 8px; margin: 4px 0 18px; font-size: 0.9rem; }
+  .row { display: flex; justify-content: space-between; gap: 12px; }
+  .row .k { color: var(--muted); }
+  .row .v { font-weight: 600; }
+  a.back { color: var(--accent-2); font-size: 0.85rem; text-decoration: none; }
+  .hint { color: var(--muted); font-size: 0.82rem; margin-top: -6px; margin-bottom: 14px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Panel administratora</h1>
+  <p class="subtitle">Wgraj nowy plik Excel (zakładka „Planning”), aby zaktualizować harmonogram podmian.</p>
+
+  <div id="loginCard" class="card" style="display:none">
+    <div id="loginMsg"></div>
+    <label for="pw">Hasło administratora</label>
+    <input type="password" id="pw" autocomplete="current-password">
+    <button id="loginBtn">Zaloguj</button>
+  </div>
+
+  <div id="panelCard" class="card" style="display:none">
+    <div id="panelMsg"></div>
+    <div class="rows" id="statusRows"></div>
+    <form id="uploadForm">
+      <label for="file">Plik Excel (.xlsx / .xlsm)</label>
+      <input type="file" id="file" accept=".xlsx,.xlsm">
+      <div class="hint">Program przeanalizuje zakładkę „Planning” i zaktualizuje daty podmian dla wszystkich osób.</div>
+      <button id="uploadBtn" type="submit">Wgraj i zaktualizuj</button>
+    </form>
+    <button class="secondary" id="logoutBtn">Wyloguj</button>
+  </div>
+
+  <p><a class="back" href="/">&larr; wróć do harmonogramu</a></p>
+</div>
+
+<script>
+const loginCard = document.getElementById('loginCard');
+const panelCard = document.getElementById('panelCard');
+const loginMsg = document.getElementById('loginMsg');
+const panelMsg = document.getElementById('panelMsg');
+const statusRows = document.getElementById('statusRows');
+
+function msg(el, text, kind) {
+  el.innerHTML = text ? `<div class="msg ${kind}">${text}</div>` : '';
+}
+
+function fmtSource(s) {
+  return s === 'kv' ? 'wgrany plik' : s === 'seed' ? 'domyślny (początkowy)' : 'brak danych';
+}
+
+async function refreshStatus() {
+  const res = await fetch('/api/admin/status');
+  const data = await res.json();
+  if (!data.loggedIn) {
+    loginCard.style.display = 'block';
+    panelCard.style.display = 'none';
+    return;
+  }
+  loginCard.style.display = 'none';
+  panelCard.style.display = 'block';
+  const s = data.schedule;
+  statusRows.innerHTML = `
+    <div class="row"><span class="k">Aktualne dane</span><span class="v">${fmtSource(s.source)}</span></div>
+    <div class="row"><span class="k">Liczba osób</span><span class="v">${s.peopleCount}</span></div>
+    <div class="row"><span class="k">Rok</span><span class="v">${s.sheetYear || '—'}</span></div>
+    <div class="row"><span class="k">Zaktualizowano</span><span class="v">${s.generatedAt ? new Date(s.generatedAt).toLocaleString('pl-PL') : '—'}</span></div>
+  `;
+}
+
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const pw = document.getElementById('pw').value;
+  msg(loginMsg, '', '');
+  const res = await fetch('/api/admin/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password: pw }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    msg(loginMsg, data.error || 'Błąd logowania.', 'err');
+    return;
+  }
+  document.getElementById('pw').value = '';
+  await refreshStatus();
+});
+
+document.getElementById('pw').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('loginBtn').click();
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/api/admin/logout', { method: 'POST' });
+  await refreshStatus();
+});
+
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fileInput = document.getElementById('file');
+  const btn = document.getElementById('uploadBtn');
+  msg(panelMsg, '', '');
+  if (!fileInput.files[0]) {
+    msg(panelMsg, 'Wybierz plik.', 'err');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Przesyłanie...';
+  try {
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    const res = await fetch('/api/admin/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) {
+      msg(panelMsg, data.error || 'Błąd przesyłania pliku.', 'err');
+    } else {
+      msg(panelMsg, `Zaktualizowano: ${data.peopleCount} osób, rok ${data.sheetYear}.`, 'ok');
+      fileInput.value = '';
+      await refreshStatus();
+    }
+  } catch (err) {
+    msg(panelMsg, 'Błąd sieci: ' + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Wgraj i zaktualizuj';
+  }
+});
+
+refreshStatus();
+</script>
+</body>
+</html>

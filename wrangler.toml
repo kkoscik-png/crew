@@ -1,0 +1,14 @@
+name = "crew-schedule"
+main = "src/worker.js"
+compatibility_date = "2026-08-24"
+compatibility_flags = ["nodejs_compat"]
+account_id = "e3370f026e022753fdbb7c2775b27fce"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[kv_namespaces]]
+binding = "SCHEDULE_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
