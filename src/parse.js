@@ -44,7 +44,7 @@ function cleanName(raw) {
 function parseWorkbook(XLSX, wb) {
   const sheetName = wb.SheetNames.find(n => n.trim().toLowerCase() === 'planning');
   if (!sheetName) {
-    throw new Error('Nie znaleziono zakładki "Planning" w pliku.');
+    throw new Error('Could not find a "Planning" sheet in the file.');
   }
   const ws = wb.Sheets[sheetName];
   const range = XLSX.utils.decode_range(ws['!ref']);
@@ -75,7 +75,7 @@ function parseWorkbook(XLSX, wb) {
     if (foundAny) { headerRow = r; break; }
   }
   if (monthBlocks.length === 0) {
-    throw new Error('Nie znaleziono nagłówków miesięcy w zakładce Planning.');
+    throw new Error('Could not find month headers in the Planning sheet.');
   }
   monthBlocks.sort((a, b) => a.startCol - b.startCol);
 
@@ -87,7 +87,7 @@ function parseWorkbook(XLSX, wb) {
     if (cell(r, jan.startCol) === 1) { dayNumberRow = r; break; }
   }
   if (dayNumberRow === -1) {
-    throw new Error('Nie znaleziono wiersza z numerami dni.');
+    throw new Error('Could not find the day-number row.');
   }
   const dataStartRow = dayNumberRow + 1;
 
@@ -187,11 +187,12 @@ function computeStatus(person, todayIso) {
 
   if (currentIdx !== -1) {
     const cur = intervals[currentIdx];
-    const goHome = addDays(cur.end, 1);
     return {
       state: 'onboard',
       currentInterval: cur,
-      goesHomeOn: goHome,
+      // The last marked (working) cell in the Excel sheet IS the day the
+      // person goes home — not the day after.
+      goesHomeOn: cur.end,
       upcoming: intervals.slice(currentIdx + 1),
     };
   }
@@ -202,7 +203,7 @@ function computeStatus(person, todayIso) {
     return {
       state: 'home',
       nextBoarding: next.start,
-      nextLeavingHome: addDays(next.end, 1),
+      nextLeavingHome: next.end,
       currentInterval: next,
       upcoming: intervals.slice(nextIdx + 1),
     };

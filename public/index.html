@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Harmonogram podmian załogi — Stena Scandica</title>
+<title>Crew Rotation Schedule — Stena Scandica</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -107,13 +107,13 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Harmonogram podmian załogi</h1>
-  <p class="subtitle">Stena Scandica — wybierz swoje imię i nazwisko, aby zobaczyć kiedy masz najbliższą podmianę.</p>
+  <h1>Crew Rotation Schedule</h1>
+  <p class="subtitle">Stena Scandica — select your name to see your next crew change.</p>
 
   <div class="card">
-    <label for="person">Imię i nazwisko</label>
+    <label for="person">Name</label>
     <select id="person">
-      <option value="">— wybierz —</option>
+      <option value="">— select —</option>
     </select>
   </div>
 
@@ -123,14 +123,14 @@
 </div>
 
 <script>
-const PL_MONTHS = ['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
-const PL_WEEKDAYS = ['niedziela','poniedziałek','wtorek','środa','czwartek','piątek','sobota'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
 function fmt(iso) {
   if (!iso) return '—';
   const [y,m,d] = iso.split('-').map(Number);
   const dt = new Date(y, m-1, d);
-  return `${d} ${PL_MONTHS[m-1]} ${y} (${PL_WEEKDAYS[dt.getDay()]})`;
+  return `${MONTHS[m-1]} ${d}, ${y} (${WEEKDAYS[dt.getDay()]})`;
 }
 
 function todayIso() {
@@ -159,7 +159,9 @@ function computeStatus(person, todayIsoStr) {
     return {
       state: 'onboard',
       currentInterval: cur,
-      goesHomeOn: addDays(cur.end, 1),
+      // The last marked (working) cell in the Excel sheet IS the day the
+      // person goes home — not the day after.
+      goesHomeOn: cur.end,
       upcoming: intervals.slice(currentIdx + 1),
     };
   }
@@ -169,7 +171,7 @@ function computeStatus(person, todayIsoStr) {
     return {
       state: 'home',
       nextBoarding: next.start,
-      nextLeavingHome: addDays(next.end, 1),
+      nextLeavingHome: next.end,
       upcoming: intervals.slice(nextIdx + 1),
     };
   }
@@ -189,8 +191,8 @@ async function load() {
     select.appendChild(opt);
   }
   const meta = document.getElementById('meta');
-  const genDate = SCHEDULE.generatedAt ? new Date(SCHEDULE.generatedAt).toLocaleString('pl-PL') : '—';
-  meta.innerHTML = `Dane zaktualizowane: ${genDate} · rok ${SCHEDULE.sheetYear || ''}<br><a href="/admin">Panel administratora</a>`;
+  const genDate = SCHEDULE.generatedAt ? new Date(SCHEDULE.generatedAt).toLocaleString('en-GB') : '—';
+  meta.innerHTML = `Data last updated: ${genDate} · year ${SCHEDULE.sheetYear || ''}<br><a href="/admin">Admin panel</a>`;
 
   const saved = sessionStorage.getItem('selectedPersonId');
   if (saved) {
@@ -217,31 +219,31 @@ function render() {
 
   let html = '<div class="card">';
   if (status.state === 'onboard') {
-    html += `<div class="status-badge onboard"><span class="dot"></span> Na statku</div>`;
+    html += `<div class="status-badge onboard"><span class="dot"></span> On board</div>`;
     html += `<div class="rows">
-      <div class="row"><span class="k">Na statku od</span><span class="v">${fmt(status.currentInterval.start)}</span></div>
-      <div class="row"><span class="k">Schodzi do domu</span><span class="v">${fmt(status.goesHomeOn)}</span></div>
+      <div class="row"><span class="k">On board since</span><span class="v">${fmt(status.currentInterval.start)}</span></div>
+      <div class="row"><span class="k">Goes home on</span><span class="v">${fmt(status.goesHomeOn)}</span></div>
     </div>`;
   } else if (status.state === 'home') {
-    html += `<div class="status-badge home"><span class="dot"></span> W domu</div>`;
+    html += `<div class="status-badge home"><span class="dot"></span> At home</div>`;
     html += `<div class="rows">
-      <div class="row"><span class="k">Wchodzi na statek</span><span class="v">${fmt(status.nextBoarding)}</span></div>
-      <div class="row"><span class="k">Schodzi do domu (koniec tej zmiany)</span><span class="v">${fmt(status.nextLeavingHome)}</span></div>
+      <div class="row"><span class="k">Boards the ship on</span><span class="v">${fmt(status.nextBoarding)}</span></div>
+      <div class="row"><span class="k">Goes home again on (end of that rotation)</span><span class="v">${fmt(status.nextLeavingHome)}</span></div>
     </div>`;
   } else {
-    html += `<div class="placeholder">Brak zaplanowanych zmian w dostępnych danych dla tej osoby.</div>`;
+    html += `<div class="placeholder">No scheduled changes found in the available data for this person.</div>`;
   }
   html += '</div>';
 
-  html += '<div class="card"><h2>Kolejne zmiany do końca roku</h2>';
+  html += '<div class="card"><h2>Upcoming changes until year end</h2>';
   if (status.upcoming && status.upcoming.length > 0) {
-    html += '<table><thead><tr><th>Wejście na statek</th><th>Zejście do domu</th></tr></thead><tbody>';
+    html += '<table><thead><tr><th>Boards the ship</th><th>Goes home</th></tr></thead><tbody>';
     for (const iv of status.upcoming) {
-      html += `<tr><td>${fmt(iv.start)}</td><td>${fmt(addDays(iv.end, 1))}</td></tr>`;
+      html += `<tr><td>${fmt(iv.start)}</td><td>${fmt(iv.end)}</td></tr>`;
     }
     html += '</tbody></table>';
   } else {
-    html += '<div class="empty">Brak kolejnych zaplanowanych zmian do końca roku.</div>';
+    html += '<div class="empty">No further scheduled changes until year end.</div>';
   }
   html += '</div>';
 

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Panel administratora — Harmonogram załogi</title>
+<title>Admin Panel — Crew Schedule</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -54,29 +54,29 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Panel administratora</h1>
-  <p class="subtitle">Wgraj nowy plik Excel (zakładka „Planning”), aby zaktualizować harmonogram podmian.</p>
+  <h1>Admin Panel</h1>
+  <p class="subtitle">Upload a new Excel file (the "Planning" sheet) to update the crew rotation schedule.</p>
 
   <div id="loginCard" class="card" style="display:none">
     <div id="loginMsg"></div>
-    <label for="pw">Hasło administratora</label>
+    <label for="pw">Admin password</label>
     <input type="password" id="pw" autocomplete="current-password">
-    <button id="loginBtn">Zaloguj</button>
+    <button id="loginBtn">Log in</button>
   </div>
 
   <div id="panelCard" class="card" style="display:none">
     <div id="panelMsg"></div>
     <div class="rows" id="statusRows"></div>
     <form id="uploadForm">
-      <label for="file">Plik Excel (.xlsx / .xlsm)</label>
+      <label for="file">Excel file (.xlsx / .xlsm)</label>
       <input type="file" id="file" accept=".xlsx,.xlsm">
-      <div class="hint">Program przeanalizuje zakładkę „Planning” i zaktualizuje daty podmian dla wszystkich osób.</div>
-      <button id="uploadBtn" type="submit">Wgraj i zaktualizuj</button>
+      <div class="hint">The program will analyze the "Planning" sheet and update the rotation dates for everyone.</div>
+      <button id="uploadBtn" type="submit">Upload and update</button>
     </form>
-    <button class="secondary" id="logoutBtn">Wyloguj</button>
+    <button class="secondary" id="logoutBtn">Log out</button>
   </div>
 
-  <p><a class="back" href="/">&larr; wróć do harmonogramu</a></p>
+  <p><a class="back" href="/">&larr; back to schedule</a></p>
 </div>
 
 <script>
@@ -91,7 +91,7 @@ function msg(el, text, kind) {
 }
 
 function fmtSource(s) {
-  return s === 'kv' ? 'wgrany plik' : s === 'seed' ? 'domyślny (początkowy)' : 'brak danych';
+  return s === 'kv' ? 'uploaded file' : s === 'seed' ? 'default (initial)' : 'no data';
 }
 
 async function refreshStatus() {
@@ -106,10 +106,10 @@ async function refreshStatus() {
   panelCard.style.display = 'block';
   const s = data.schedule;
   statusRows.innerHTML = `
-    <div class="row"><span class="k">Aktualne dane</span><span class="v">${fmtSource(s.source)}</span></div>
-    <div class="row"><span class="k">Liczba osób</span><span class="v">${s.peopleCount}</span></div>
-    <div class="row"><span class="k">Rok</span><span class="v">${s.sheetYear || '—'}</span></div>
-    <div class="row"><span class="k">Zaktualizowano</span><span class="v">${s.generatedAt ? new Date(s.generatedAt).toLocaleString('pl-PL') : '—'}</span></div>
+    <div class="row"><span class="k">Current data</span><span class="v">${fmtSource(s.source)}</span></div>
+    <div class="row"><span class="k">Number of people</span><span class="v">${s.peopleCount}</span></div>
+    <div class="row"><span class="k">Year</span><span class="v">${s.sheetYear || '—'}</span></div>
+    <div class="row"><span class="k">Last updated</span><span class="v">${s.generatedAt ? new Date(s.generatedAt).toLocaleString('en-GB') : '—'}</span></div>
   `;
 }
 
@@ -123,7 +123,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   });
   const data = await res.json();
   if (!res.ok) {
-    msg(loginMsg, data.error || 'Błąd logowania.', 'err');
+    msg(loginMsg, data.error || 'Login failed.', 'err');
     return;
   }
   document.getElementById('pw').value = '';
@@ -145,28 +145,28 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
   const btn = document.getElementById('uploadBtn');
   msg(panelMsg, '', '');
   if (!fileInput.files[0]) {
-    msg(panelMsg, 'Wybierz plik.', 'err');
+    msg(panelMsg, 'Please choose a file.', 'err');
     return;
   }
   btn.disabled = true;
-  btn.textContent = 'Przesyłanie...';
+  btn.textContent = 'Uploading...';
   try {
     const fd = new FormData();
     fd.append('file', fileInput.files[0]);
     const res = await fetch('/api/admin/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (!res.ok) {
-      msg(panelMsg, data.error || 'Błąd przesyłania pliku.', 'err');
+      msg(panelMsg, data.error || 'File upload failed.', 'err');
     } else {
-      msg(panelMsg, `Zaktualizowano: ${data.peopleCount} osób, rok ${data.sheetYear}.`, 'ok');
+      msg(panelMsg, `Updated: ${data.peopleCount} people, year ${data.sheetYear}.`, 'ok');
       fileInput.value = '';
       await refreshStatus();
     }
   } catch (err) {
-    msg(panelMsg, 'Błąd sieci: ' + err.message, 'err');
+    msg(panelMsg, 'Network error: ' + err.message, 'err');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Wgraj i zaktualizuj';
+    btn.textContent = 'Upload and update';
   }
 });
 

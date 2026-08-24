@@ -85,13 +85,13 @@ async function handleLogin(request, env) {
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'Nieprawidłowe żądanie.' }, { status: 400 });
+    return json({ error: 'Invalid request.' }, { status: 400 });
   }
   if (!env.ADMIN_PASSWORD) {
-    return json({ error: 'Panel admina nie jest skonfigurowany (brak ADMIN_PASSWORD).' }, { status: 500 });
+    return json({ error: 'The admin panel is not configured (ADMIN_PASSWORD is missing).' }, { status: 500 });
   }
   if (typeof body.password !== 'string' || !timingSafeEqual(body.password, env.ADMIN_PASSWORD)) {
-    return json({ error: 'Nieprawidłowe hasło.' }, { status: 401 });
+    return json({ error: 'Incorrect password.' }, { status: 401 });
   }
   const token = await makeSessionToken(env.SESSION_SECRET);
   return json({ ok: true }, {
@@ -123,17 +123,17 @@ async function handleAdminStatus(request, env) {
 
 async function handleUpload(request, env) {
   if (!(await requireAdmin(request, env))) {
-    return json({ error: 'Wymagane logowanie.' }, { status: 401 });
+    return json({ error: 'Login required.' }, { status: 401 });
   }
   let form;
   try {
     form = await request.formData();
   } catch {
-    return json({ error: 'Nie udało się odczytać przesłanego pliku.' }, { status: 400 });
+    return json({ error: 'Could not read the uploaded file.' }, { status: 400 });
   }
   const file = form.get('file');
   if (!file || typeof file.arrayBuffer !== 'function') {
-    return json({ error: 'Brak pliku w żądaniu.' }, { status: 400 });
+    return json({ error: 'No file in the request.' }, { status: 400 });
   }
   const buf = await file.arrayBuffer();
   let model;
@@ -141,10 +141,10 @@ async function handleUpload(request, env) {
     const wb = XLSX.read(buf, { type: 'array' });
     model = parseWorkbook(XLSX, wb);
   } catch (e) {
-    return json({ error: `Nie udało się przetworzyć pliku: ${e.message}` }, { status: 400 });
+    return json({ error: `Could not process the file: ${e.message}` }, { status: 400 });
   }
   if (!model.people || model.people.length === 0) {
-    return json({ error: 'Nie znaleziono żadnych osób w zakładce Planning.' }, { status: 400 });
+    return json({ error: 'No people found in the Planning sheet.' }, { status: 400 });
   }
   await env.SCHEDULE_KV.put(KV_KEY, JSON.stringify(model));
   return json({
@@ -179,12 +179,12 @@ export default {
         return await handleUpload(request, env);
       }
     } catch (e) {
-      return json({ error: `Błąd serwera: ${e.message}` }, { status: 500 });
+      return json({ error: `Server error: ${e.message}` }, { status: 500 });
     }
 
     // Anything else under /api/* that isn't matched -> 404 JSON.
     if (pathname.startsWith('/api/')) {
-      return json({ error: 'Nie znaleziono.' }, { status: 404 });
+      return json({ error: 'Not found.' }, { status: 404 });
     }
     // Should not normally be reached (assets are served automatically),
     // but fall back to the asset handler just in case.

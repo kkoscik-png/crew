@@ -1,67 +1,67 @@
-# Harmonogram podmian załogi — Stena Scandica
+# Crew Rotation Schedule — Stena Scandica
 
-Aplikacja na Cloudflare Workers, która:
+A Cloudflare Workers app that:
 
-- czyta dane z zakładki **Planning** pliku Excel (kto, od kiedy pracuje na statku),
-- pozwala wybrać z listy rozwijanej imię i nazwisko i pokazuje: czy dana osoba jest teraz na statku czy w domu, kiedy ma najbliższą podmianę, oraz listę kolejnych podmian do końca roku,
-- ma panel administratora (`/admin`, chroniony hasłem) do wgrywania nowego pliku Excel — po wgraniu dane są automatycznie przeliczane i zapisywane.
+- reads data from the **Planning** sheet of an Excel file (who works on board, and when),
+- lets you pick your name from a dropdown and shows whether you're currently on the ship or at home, when your next rotation is, and a list of every upcoming rotation until the end of the year,
+- has an admin panel (`/admin`, password-protected) for uploading a new Excel file — once uploaded, the schedule is recalculated and saved automatically.
 
-Dane początkowe (z pliku, który mi wysłałeś) są już wbudowane w `public/seed.json`, więc aplikacja działa od razu po wdrożeniu, zanim jeszcze wgrasz cokolwiek przez panel admina.
+The initial data (from the file you sent me) is already baked into `public/seed.json`, so the app works right after deployment, even before you upload anything through the admin panel.
 
-## Jak to jest zbudowane
+## How it's built
 
-- `src/worker.js` — Cloudflare Worker: udostępnia `/api/schedule` (dane publiczne), `/api/admin/login`, `/api/admin/upload`, `/api/admin/status`.
-- `src/parse.js` — logika czytania zakładki „Planning” i liczenia okresów pracy na statku.
-- `public/index.html` — strona główna z listą rozwijaną.
-- `public/admin.html` — panel admina (logowanie hasłem + upload Excela).
-- `public/seed.json` — dane wygenerowane z Twojego pliku (na start).
+- `src/worker.js` — the Cloudflare Worker: serves `/api/schedule` (public data), `/api/admin/login`, `/api/admin/upload`, `/api/admin/status`.
+- `src/parse.js` — logic for reading the "Planning" sheet and computing on-board periods.
+- `public/index.html` — the main page with the dropdown.
+- `public/admin.html` — the admin panel (password login + Excel upload).
+- `public/seed.json` — data generated from your original file (used as the starting point).
 
-### Jak rozpoznawane jest „na statku” / „w domu”
+### How "on board" / "at home" is determined
 
-W zakładce Planning każdy dzień ma kod (wg legendy w kolumnach B/C arkusza):
-`M, C, 2, 3, S, B, A, O, SC, X` = osoba faktycznie pracuje na statku tego dnia.
-Puste pole, `T` (Travel Day), `LA`, `P`, `L`, `V`, `CT` = osoba nie jest na statku (dom / urlop / szkolenie / zwolnienie / podróż).
+In the Planning sheet, every day has a code (per the legend in columns B/C of the sheet):
+`M, C, 2, 3, S, B, A, O, SC, X` = the person is actually working on board that day.
+A blank cell, `T` (Travel Day), `LA`, `P`, `L`, `V`, `CT` = the person is not on the ship (home / leave / training / sick leave / travel).
 
-Kolejne dni z kodem pracy są grupowane w „turę” (interval). Jeśli dziś mieścisz się w takiej turze — jesteś „na statku”, a data zejścia do domu to dzień po ostatnim dniu pracy. Jeśli nie — pokazywana jest najbliższa nadchodząca tura (data wejścia i data zejścia po niej), a pod spodem lista wszystkich kolejnych tur do końca roku.
+Consecutive days with a working code are grouped into a "rotation" (interval). If today falls inside such an interval, the person is "on board", and the day they go home is the **last marked working day itself** (not the day after). If today falls outside any interval, the app shows the next upcoming rotation (boarding date and the date they go home again), plus a table of every later rotation until the end of the year.
 
-Jeśli chcesz zmienić tę logikę (np. inaczej traktować dzień „T”), zmień zbiór `ONBOARD_CODES` w `src/parse.js` — to jedyne miejsce, które o tym decyduje.
+If you ever want to change this logic (e.g. treat "T" differently), the `ONBOARD_CODES` set in `src/parse.js` is the single place that decides it.
 
-## Wymagania
+## Requirements
 
-- Konto Cloudflare (masz).
-- Node.js 18+ i npm na Twoim komputerze (do wdrożenia lokalnie przez `wrangler`).
+- A Cloudflare account (you have one).
+- Node.js 18+ and npm on your computer (to deploy locally with `wrangler`).
 
-## Wdrożenie krok po kroku
+## Step-by-step deployment
 
-Wszystkie polecenia wpisujesz w terminalu, w folderze tego projektu (tam gdzie jest `wrangler.toml`).
+Run all commands in a terminal, inside this project's folder (where `wrangler.toml` lives).
 
-### 1. Instalacja zależności
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Zaloguj Wranglera do swojego konta Cloudflare
+### 2. Log Wrangler into your Cloudflare account
 
-Najprościej przez przeglądarkę:
+Easiest via the browser:
 
 ```bash
 npx wrangler login
 ```
 
-Otworzy się przeglądarka z prośbą o zalogowanie i zgodę — potwierdź.
+A browser window will open asking you to log in and approve — confirm it.
 
-*(Alternatywnie, jeśli wolisz użyć tokena API zamiast logowania przez przeglądarkę, możesz w tym samym terminalu ustawić `export CLOUDFLARE_API_TOKEN=twój_token` przed kolejnymi krokami — wtedy `wrangler login` nie jest potrzebny. Jeśli używałeś tokena wklejonego wcześniej w tej rozmowie, **koniecznie go potem usuń/wygeneruj nowy** w Cloudflare Dashboard → My Profile → API Tokens, bo token wklejony na czacie nie powinien zostać użyty na stałe.)*
+*(Alternatively, if you'd rather use an API token instead of browser login, you can `export CLOUDFLARE_API_TOKEN=your_token` in the same terminal before the next steps — then `wrangler login` isn't needed. If you used a token pasted earlier in this conversation, **make sure to revoke it / generate a new one** afterwards in the Cloudflare Dashboard → My Profile → API Tokens, since a token shared in chat shouldn't be kept in permanent use.)*
 
-Konto (`account_id`) jest już wpisane w `wrangler.toml`.
+The account (`account_id`) is already set in `wrangler.toml`.
 
-### 3. Utwórz magazyn KV (do przechowywania wgranego harmonogramu)
+### 3. Create a KV namespace (to store the uploaded schedule)
 
 ```bash
 npx wrangler kv namespace create SCHEDULE_KV
 ```
 
-Polecenie wypisze coś w stylu:
+This prints something like:
 
 ```
 [[kv_namespaces]]
@@ -69,59 +69,59 @@ binding = "SCHEDULE_KV"
 id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ```
 
-Skopiuj wartość `id` i wklej ją w pliku `wrangler.toml`, zastępując `REPLACE_WITH_KV_NAMESPACE_ID`.
+Copy the `id` value and paste it into `wrangler.toml`, replacing `REPLACE_WITH_KV_NAMESPACE_ID`.
 
-### 4. Ustaw hasło administratora i sekret sesji
+### 4. Set the admin password and session secret
 
 ```bash
 npx wrangler secret put ADMIN_PASSWORD
 ```
 
-Poda się o wpisanie hasła — wpisz hasło, którym będziesz logować się do `/admin`.
+You'll be prompted to type a password — this is what you'll use to log into `/admin`.
 
 ```bash
 npx wrangler secret put SESSION_SECRET
 ```
 
-Tu wpisz dowolny długi losowy ciąg znaków (np. wygenerowany poleceniem poniżej) — to sekret używany wewnętrznie do podpisywania sesji, nie musisz go zapamiętywać:
+Enter any long random string here (e.g. generated with the command below) — this is used internally to sign sessions, you don't need to remember it:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### 5. Wdróż aplikację
+### 5. Deploy
 
 ```bash
 npx wrangler deploy
 ```
 
-Po chwili dostaniesz adres w stylu `https://crew-schedule.<twoja-subdomena>.workers.dev` — to jest gotowa aplikacja. Panel admina jest pod `https://.../admin`.
+After a moment you'll get a URL like `https://crew-schedule.<your-subdomain>.workers.dev` — that's your live app. The admin panel is at `https://.../admin`.
 
-### 6. (Opcjonalnie) własna domena
+### 6. (Optional) Custom domain
 
-Jeśli chcesz podpiąć własną domenę (np. `zaloga.twojafirma.pl`) zamiast adresu `workers.dev`, w Cloudflare Dashboard wejdź w **Workers & Pages → crew-schedule → Settings → Domains & Routes → Add** i postępuj zgodnie z instrukcją (domena musi być podpięta pod Cloudflare).
+If you'd like to use your own domain (e.g. `crew.yourcompany.com`) instead of the `workers.dev` address, in the Cloudflare Dashboard go to **Workers & Pages → crew-schedule → Settings → Domains & Routes → Add** and follow the prompts (the domain must already be on Cloudflare).
 
-## Aktualizacja harmonogramu
+## Updating the schedule
 
-Wejdź na `/admin`, zaloguj się hasłem ustawionym w kroku 4, i wgraj nowy plik `.xlsx`/`.xlsm` (musi mieć zakładkę „Planning” w tym samym układzie co oryginał). Dane zaktualizują się natychmiast dla wszystkich użytkowników strony głównej.
+Go to `/admin`, log in with the password from step 4, and upload a new `.xlsx`/`.xlsm` file (it must have a "Planning" sheet laid out the same way as the original). The data updates instantly for everyone visiting the main page.
 
-## Aktualizacja kodu aplikacji w przyszłości
+## Updating the app's code later
 
-Jeśli kiedyś zechcesz coś zmienić w kodzie (`src/`, `public/`), wystarczy po zmianach ponownie uruchomić:
+If you ever want to change something in the code (`src/`, `public/`), just run this again after making changes:
 
 ```bash
 npx wrangler deploy
 ```
 
-## Test lokalny przed wdrożeniem (opcjonalnie)
+## Local testing before deploying (optional)
 
 ```bash
 npx wrangler dev
 ```
 
-Otworzy lokalny serwer (domyślnie `http://localhost:8787`) z pełną symulacją Workera — możesz przetestować stronę i panel admina zanim wdrożysz na produkcję. Do testu lokalnego panelu admina utwórz plik `.dev.vars` (nie jest wgrywany na Cloudflare) z zawartością:
+This starts a local server (default `http://localhost:8787`) with a full simulation of the Worker — you can test the page and admin panel before deploying to production. For local testing of the admin panel, create a `.dev.vars` file (not deployed to Cloudflare) containing:
 
 ```
-ADMIN_PASSWORD=twoje-haslo-testowe
-SESSION_SECRET=cokolwiek-dlugiego
+ADMIN_PASSWORD=your-test-password
+SESSION_SECRET=anything-long
 ```
