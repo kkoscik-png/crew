@@ -103,14 +103,15 @@
   .meta { color: var(--muted); font-size: 0.78rem; text-align: center; margin-top: 28px; line-height: 1.6; }
   .meta a { color: var(--accent-2); text-decoration: none; }
   .placeholder { color: var(--muted); text-align: center; padding: 30px 0; }
-  .cal-legend { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--muted); margin-bottom: 10px; }
-  .cal-legend .swatch { width: 12px; height: 12px; border-radius: 4px; background: var(--onboard-bg); border: 1px solid var(--onboard); display: inline-block; }
-  .cal-title { font-weight: 600; font-size: 0.92rem; margin: 18px 0 10px; color: var(--text); }
+  .cal-legend { display: flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--muted); margin-bottom: 8px; }
+  .cal-legend .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--onboard-bg); border: 1px solid var(--onboard); display: inline-block; }
+  .cal-months { max-width: 260px; margin: 0 auto; }
+  .cal-title { font-weight: 600; font-size: 0.8rem; margin: 14px 0 8px; color: var(--text); text-align: center; }
   .cal-title:first-of-type { margin-top: 0; }
-  .cal-weekdays, .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-  .cal-weekdays { margin-bottom: 6px; }
-  .cal-weekdays div { text-align: center; font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
-  .cal-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 0.8rem; color: var(--text); }
+  .cal-weekdays, .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-weekdays { margin-bottom: 4px; }
+  .cal-weekdays div { text-align: center; font-size: 0.58rem; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+  .cal-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 0.66rem; color: var(--text); }
   .cal-cell.empty { visibility: hidden; }
   .cal-cell.past { color: var(--muted); }
   .cal-cell.onboard { background: var(--onboard-bg); color: var(--onboard); font-weight: 700; }
@@ -178,6 +179,7 @@ function renderCalendar(person) {
   const todayStr = todayIso();
   let html = '<div class="card"><h2>Calendar — next 3 months</h2>';
   html += '<div class="cal-legend"><span class="swatch"></span> On board</div>';
+  html += '<div class="cal-months">';
   for (let i = 0; i < 3; i++) {
     const y = now.getFullYear();
     const m = now.getMonth() + i;
@@ -201,7 +203,8 @@ function renderCalendar(person) {
     }
     html += '</div>';
   }
-  html += '</div>';
+  html += '</div>'; // .cal-months
+  html += '</div>'; // .card
   return html;
 }
 
