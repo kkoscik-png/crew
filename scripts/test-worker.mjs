@@ -95,13 +95,48 @@ async function main() {
   console.log('8) GET /api/schedule after upload -> source=', data.source, 'people=', data.people.length);
   if (data.source !== 'kv') throw new Error('FAIL 8');
 
-  // 9. Logout clears session
+  // 9. Public timetable endpoint should fall back to timetable-seed.json
+  res = await worker.fetch(req('/api/timetable'), env);
+  data = await res.json();
+  console.log('9) GET /api/timetable ->', res.status, 'source=', data.source, 'cycleDays=', data.cycleDays.length);
+  if (res.status !== 200 || data.source !== 'seed' || data.cycleDays.length === 0) throw new Error('FAIL 9');
+
+  // 10. Timetable upload without auth should fail
+  res = await worker.fetch(req('/api/admin/upload-timetable', { method: 'POST', body: new FormData() }), env);
+  console.log('10) POST /api/admin/upload-timetable no auth ->', res.status);
+  if (res.status !== 401) throw new Error('FAIL 10');
+
+  // 11. Upload the real timetable PDF with auth
+  const pdfPath = process.argv[3];
+  if (pdfPath) {
+    const pdfBuf = fs.readFileSync(pdfPath);
+    const ttFd = new FormData();
+    ttFd.append('file', new File([pdfBuf], 'timetable.pdf'));
+    res = await worker.fetch(req('/api/admin/upload-timetable', {
+      method: 'POST',
+      headers: { cookie: `admin_session=${cookie}` },
+      body: ttFd,
+    }), env);
+    data = await res.json();
+    console.log('11) POST /api/admin/upload-timetable with auth ->', res.status, data);
+    if (res.status !== 200 || !data.ok) throw new Error('FAIL 11');
+
+    // 12. Timetable now served from KV
+    res = await worker.fetch(req('/api/timetable'), env);
+    data = await res.json();
+    console.log('12) GET /api/timetable after upload -> source=', data.source, 'cycleDays=', data.cycleDays.length);
+    if (data.source !== 'kv') throw new Error('FAIL 12');
+  } else {
+    console.log('11-12) skipped (no PDF path given as 2nd arg)');
+  }
+
+  // 13. Logout clears session
   res = await worker.fetch(req('/api/admin/logout', { method: 'POST' }), env);
   const cleared = getCookieFromResponse(res);
   res = await worker.fetch(req('/api/admin/status', { headers: { cookie: `admin_session=${cleared}` } }), env);
   data = await res.json();
-  console.log('9) status after logout ->', data.loggedIn);
-  if (data.loggedIn !== false) throw new Error('FAIL 9');
+  console.log('13) status after logout ->', data.loggedIn);
+  if (data.loggedIn !== false) throw new Error('FAIL 13');
 
   console.log('\nALL TESTS PASSED');
 }
