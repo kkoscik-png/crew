@@ -1,7 +1,10 @@
 import * as XLSX from 'xlsx';
+import { getDocumentProxy, extractTextItems } from 'unpdf';
 import { parseWorkbook } from './parse.js';
+import { parseTimetableItems } from './timetable.js';
 
 const KV_KEY = 'schedule';
+const TIMETABLE_KV_KEY = 'timetable';
 const SESSION_COOKIE = 'admin_session';
 const SESSION_TTL_SECONDS = 12 * 60 * 60; // 12h
 
@@ -73,10 +76,26 @@ async function loadSchedule(env, request) {
   return { source: 'none', model: { people: [], generatedAt: null, sheetYear: null } };
 }
 
+async function loadTimetable(env, request) {
+  const stored = await env.SCHEDULE_KV.get(TIMETABLE_KV_KEY);
+  if (stored) return { source: 'kv', model: JSON.parse(stored) };
+  const seedUrl = new URL('/timetable-seed.json', request.url);
+  const resp = await env.ASSETS.fetch(new Request(seedUrl));
+  if (resp.ok) {
+    return { source: 'seed', model: await resp.json() };
+  }
+  return { source: 'none', model: { cycleStartIso: null, cycleDays: [], shipName: null, uploadedAt: null } };
+}
+
 // ---------- route handlers ----------
 
 async function handleSchedule(request, env) {
   const { source, model } = await loadSchedule(env, request);
+  return json({ ...model, source });
+}
+
+async function handleTimetable(request, env) {
+  const { source, model } = await loadTimetable(env, request);
   return json({ ...model, source });
 }
 
@@ -110,6 +129,7 @@ function handleLogout() {
 async function handleAdminStatus(request, env) {
   const loggedIn = await requireAdmin(request, env);
   const { source, model } = await loadSchedule(env, request);
+  const tt = await loadTimetable(env, request);
   return json({
     loggedIn,
     schedule: {
@@ -117,6 +137,13 @@ async function handleAdminStatus(request, env) {
       generatedAt: model.generatedAt,
       sheetYear: model.sheetYear,
       peopleCount: (model.people || []).length,
+    },
+    timetable: {
+      source: tt.source,
+      shipName: tt.model.shipName,
+      cycleStartIso: tt.model.cycleStartIso,
+      cycleLength: (tt.model.cycleDays || []).length,
+      uploadedAt: tt.model.uploadedAt,
     },
   });
 }
@@ -155,6 +182,40 @@ async function handleUpload(request, env) {
   });
 }
 
+async function handleUploadTimetable(request, env) {
+  if (!(await requireAdmin(request, env))) {
+    return json({ error: 'Login required.' }, { status: 401 });
+  }
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
+    return json({ error: 'Could not read the uploaded file.' }, { status: 400 });
+  }
+  const file = form.get('file');
+  if (!file || typeof file.arrayBuffer !== 'function') {
+    return json({ error: 'No file in the request.' }, { status: 400 });
+  }
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let result;
+  try {
+    const pdf = await getDocumentProxy(buf);
+    const { items } = await extractTextItems(pdf, { mergeHorizontalSpace: false });
+    result = parseTimetableItems(items[0]);
+  } catch (e) {
+    return json({ error: `Could not process the PDF: ${e.message}` }, { status: 400 });
+  }
+  const model = { ...result, uploadedAt: new Date().toISOString() };
+  await env.SCHEDULE_KV.put(TIMETABLE_KV_KEY, JSON.stringify(model));
+  return json({
+    ok: true,
+    shipName: model.shipName,
+    cycleStartIso: model.cycleStartIso,
+    cycleLength: model.cycleDays.length,
+    uploadedAt: model.uploadedAt,
+  });
+}
+
 // ---------- entry ----------
 
 export default {
@@ -165,6 +226,9 @@ export default {
     try {
       if (pathname === '/api/schedule' && request.method === 'GET') {
         return await handleSchedule(request, env);
+      }
+      if (pathname === '/api/timetable' && request.method === 'GET') {
+        return await handleTimetable(request, env);
       }
       if (pathname === '/api/admin/login' && request.method === 'POST') {
         return await handleLogin(request, env);
@@ -177,6 +241,9 @@ export default {
       }
       if (pathname === '/api/admin/upload' && request.method === 'POST') {
         return await handleUpload(request, env);
+      }
+      if (pathname === '/api/admin/upload-timetable' && request.method === 'POST') {
+        return await handleUploadTimetable(request, env);
       }
     } catch (e) {
       return json({ error: `Server error: ${e.message}` }, { status: 500 });
