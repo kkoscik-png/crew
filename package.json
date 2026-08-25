@@ -10,6 +10,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "unpdf": "^1.8.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
