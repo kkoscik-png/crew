@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ship Timetable — Stena Scandica</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --text: #1b2430;
+    --muted: #5b6675;
+    --border: #e1e5ea;
+    --accent: #0a5c8a;
+    --accent-2: #0e7fbf;
+    --port-v: #189752;
+    --port-v-bg: #e5f5eb;
+    --port-n: #d1382c;
+    --port-n-bg: #fbe9e7;
+    --gold: #e0a415;
+    --row-alt: #f7f9fa;
+    --shadow: 0 1px 3px rgba(20,30,40,0.08), 0 1px 2px rgba(20,30,40,0.06);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1620;
+      --card: #17212c;
+      --text: #e8edf2;
+      --muted: #8fa0b3;
+      --border: #26333f;
+      --accent: #4fb3e8;
+      --accent-2: #6cc4f0;
+      --port-v: #2fbf71;
+      --port-v-bg: #123322;
+      --port-n: #f0574a;
+      --port-n-bg: #3a1615;
+      --gold: #e0b03a;
+      --row-alt: #131c26;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0 0 16px; }
+  .nav-row { margin-bottom: 20px; }
+  .navbtn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.85rem; font-weight: 600; text-decoration: none;
+    color: var(--accent); background: var(--card); border: 1px solid var(--border);
+    padding: 9px 14px; border-radius: 10px; box-shadow: var(--shadow);
+  }
+  .navbtn:hover { border-color: var(--accent); }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+    padding: 5px 10px; border-radius: 6px; background: var(--card); border: 1px solid var(--border); color: var(--muted);
+  }
+  .chip i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+  .cal { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+  .head {
+    display: grid; grid-template-columns: 64px 1fr 1fr;
+    background: var(--accent); color: #fff;
+  }
+  .head > div { padding: 10px 10px 7px; }
+  .head .lbl { font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+  .head .p { border-left: 1px solid rgba(255,255,255,.25); }
+  .head .scale { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 8.5px; letter-spacing: .04em; opacity: .7; margin-top: 4px; }
+  .month {
+    display: flex; align-items: baseline; gap: 8px; padding: 12px 10px 6px;
+    border-top: 1px solid var(--border); border-bottom: 2px solid var(--accent); background: var(--row-alt);
+  }
+  .month b { font-size: 13px; letter-spacing: .03em; text-transform: uppercase; }
+  .month span { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .row { display: grid; grid-template-columns: 64px 1fr 1fr; border-bottom: 1px solid var(--border); align-items: stretch; min-height: 46px; }
+  .row.we { background: var(--row-alt); }
+  .row.today { box-shadow: inset 3px 0 0 var(--gold); }
+  .date { display: flex; align-items: center; gap: 6px; padding-left: 10px; font-family: var(--mono); font-size: 12px; }
+  .date .dow { color: var(--muted); font-size: 10px; text-transform: uppercase; width: 18px; }
+  .row.we .date .dow { font-weight: 700; }
+  .cell { display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 6px 10px; border-left: 1px solid var(--border); }
+  .hrs { font-family: var(--mono); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .cell.v .hrs { color: var(--port-v); }
+  .cell.n .hrs { color: var(--port-n); }
+  .track {
+    position: relative; height: 6px; width: 100%; border-radius: 3px;
+    background-image: linear-gradient(to right, var(--border) 1px, transparent 1px);
+    background-size: 25% 100%; background-color: var(--row-alt);
+  }
+  .bar { position: absolute; top: 0; height: 6px; border-radius: 3px; }
+  .cell.v .bar { background: var(--port-v); }
+  .cell.n .bar { background: var(--port-n); }
+  .empty-note { color: var(--muted); font-size: 0.75rem; padding: 3px 0; }
+  .meta { color: var(--muted); font-size: 0.78rem; text-align: center; margin-top: 24px; line-height: 1.6; }
+  .meta a { color: var(--accent-2); text-decoration: none; }
+  .placeholder { color: var(--muted); text-align: center; padding: 30px 0; background: var(--card); border: 1px solid var(--border); border-radius: 14px; }
+  @media (max-width: 500px) {
+    .head, .row { grid-template-columns: 46px 1fr 1fr; }
+    .date { font-size: 10.5px; padding-left: 6px; gap: 4px; }
+    .date .dow { width: 14px; font-size: 9px; }
+    .cell { padding: 5px 6px; }
+    .hrs { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Ship Timetable</h1>
+  <p class="subtitle" id="subtitle">Stena Scandica — Ventspils ⇄ Nynäshamn</p>
+
+  <div class="nav-row"><a class="navbtn" href="/">← Crew rotation schedule</a></div>
+
+  <div class="legend">
+    <span class="chip"><i style="background:var(--port-v)"></i>Ventspils</span>
+    <span class="chip"><i style="background:var(--port-n)"></i>Nynäshamn</span>
+    <span class="chip"><i style="background:var(--gold)"></i>Today</span>
+  </div>
+
+  <div id="content"></div>
+
+  <p class="meta" id="meta"></p>
+</div>
+
+<script>
+const MON = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toIsoUTC(d) { return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())}`; }
+function fromIso(iso) { const [y,m,d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m-1, d)); }
+function addDaysUTC(d, n) { return new Date(d.getTime() + n * 86400000); }
+function todayIsoUTC() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+
+function mins(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t || '');
+  if (!m) return null;
+  return (+m[1]) * 60 + (+m[2]);
+}
+
+function shipDayForDate(tt, iso) {
+  const start = fromIso(tt.cycleStartIso);
+  const cur = fromIso(iso);
+  const diff = Math.round((cur - start) / 86400000);
+  const L = tt.cycleDays.length;
+  const idx = ((diff % L) + L) % L;
+  return tt.cycleDays[idx];
+}
+
+function portCell(key, times) {
+  if (!times) return `<div class="cell ${key}"><div class="empty-note">—</div></div>`;
+  const a = mins(times[0]), b = mins(times[1]);
+  if (a === null || b === null) return `<div class="cell ${key}"><div class="empty-note">—</div></div>`;
+  const left = a / 1440 * 100;
+  const width = Math.max((b - a) / 1440 * 100, 1.2);
+  return `<div class="cell ${key}">` +
+    `<div class="hrs">${times[0]} – ${times[1]}</div>` +
+    `<div class="track"><span class="bar" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"></span></div>` +
+  '</div>';
+}
+
+async function load() {
+  const res = await fetch('/api/timetable');
+  const tt = await res.json();
+  const content = document.getElementById('content');
+  const meta = document.getElementById('meta');
+
+  if (!tt.cycleStartIso || !tt.cycleDays || !tt.cycleDays.length) {
+    content.innerHTML = '<div class="placeholder">No timetable has been uploaded yet. Ask an admin to upload the ship\'s PDF timetable in the admin panel.</div>';
+    return;
+  }
+
+  document.getElementById('subtitle').textContent = `${tt.shipName || 'Stena Scandica'} — Ventspils ⇄ Nynäshamn`;
+
+  const todayIso = todayIsoUTC();
+  const cycleStart = fromIso(tt.cycleStartIso);
+  const todayDate = fromIso(todayIso);
+  let start = todayDate > cycleStart ? todayDate : cycleStart;
+  const end = new Date(Date.UTC(start.getUTCFullYear(), 11, 31));
+
+  let html = '<div class="cal">';
+  html += '<div class="head">' +
+    '<div><div class="lbl">Date</div></div>' +
+    '<div class="p"><div class="lbl">Ventspils</div><div class="scale"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>' +
+    '<div class="p"><div class="lbl">Nynäshamn</div><div class="scale"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>' +
+  '</div>';
+
+  let curMonth = -1;
+  for (let d = start; d <= end; d = addDaysUTC(d, 1)) {
+    const iso = toIsoUTC(d);
+    const dow = d.getUTCDay();
+    const mIdx = d.getUTCMonth();
+    const plan = shipDayForDate(tt, iso);
+
+    if (mIdx !== curMonth) {
+      curMonth = mIdx;
+      const len = new Date(Date.UTC(d.getUTCFullYear(), mIdx + 1, 0)).getUTCDate();
+      html += `<div class="month"><b>${MON[mIdx]} ${d.getUTCFullYear()}</b><span>${len} days</span></div>`;
+    }
+
+    const cls = ['row'];
+    if (dow === 0 || dow === 6) cls.push('we');
+    if (iso === todayIso) cls.push('today');
+
+    html += `<div class="${cls.join(' ')}">` +
+      `<div class="date"><span class="dow">${DOW[dow]}</span>${pad2(d.getUTCDate())}.${pad2(mIdx+1)}</div>` +
+      portCell('v', plan ? plan.v : null) +
+      portCell('n', plan ? plan.n : null) +
+    '</div>';
+  }
+  html += '</div>';
+  content.innerHTML = html;
+
+  const uploaded = tt.uploadedAt ? new Date(tt.uploadedAt).toLocaleString('en-GB') : '—';
+  meta.innerHTML = `Timetable source: ${tt.source === 'kv' ? 'uploaded PDF' : 'default'} · last updated ${uploaded}<br><a href="/admin">Admin panel</a>`;
+}
+
+load();
+</script>
+</body>
+</html>

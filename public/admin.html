@@ -50,6 +50,7 @@
   .row .v { font-weight: 600; }
   a.back { color: var(--accent-2); font-size: 0.85rem; text-decoration: none; }
   .hint { color: var(--muted); font-size: 0.82rem; margin-top: -6px; margin-bottom: 14px; line-height: 1.5; }
+  .section-title { font-size: 1rem; margin: 0 0 14px; color: var(--text); }
 </style>
 </head>
 <body>
@@ -64,15 +65,32 @@
     <button id="loginBtn">Log in</button>
   </div>
 
-  <div id="panelCard" class="card" style="display:none">
-    <div id="panelMsg"></div>
-    <div class="rows" id="statusRows"></div>
-    <form id="uploadForm">
-      <label for="file">Excel file (.xlsx / .xlsm)</label>
-      <input type="file" id="file" accept=".xlsx,.xlsm">
-      <div class="hint">The program will analyze the "Planning" sheet and update the rotation dates for everyone.</div>
-      <button id="uploadBtn" type="submit">Upload and update</button>
-    </form>
+  <div id="panelCard" style="display:none">
+
+    <div class="card">
+      <h2 class="section-title">Crew rotation schedule</h2>
+      <div id="panelMsg"></div>
+      <div class="rows" id="statusRows"></div>
+      <form id="uploadForm">
+        <label for="file">Excel file (.xlsx / .xlsm)</label>
+        <input type="file" id="file" accept=".xlsx,.xlsm">
+        <div class="hint">The program will analyze the "Planning" sheet and update the rotation dates for everyone.</div>
+        <button id="uploadBtn" type="submit">Upload and update</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Ship timetable</h2>
+      <div id="ttMsg"></div>
+      <div class="rows" id="ttStatusRows"></div>
+      <form id="ttUploadForm">
+        <label for="ttfile">Timetable PDF (Stena Line SNV format)</label>
+        <input type="file" id="ttfile" accept=".pdf">
+        <div class="hint">The program reads the port arrival/departure times for Stena Scandica and repeats that cycle until the end of the year — shown on the "Ship timetable" page and as the port bar under each day in the crew calendar.</div>
+        <button id="ttUploadBtn" type="submit">Upload and update</button>
+      </form>
+    </div>
+
     <button class="secondary" id="logoutBtn">Log out</button>
   </div>
 
@@ -85,6 +103,8 @@ const panelCard = document.getElementById('panelCard');
 const loginMsg = document.getElementById('loginMsg');
 const panelMsg = document.getElementById('panelMsg');
 const statusRows = document.getElementById('statusRows');
+const ttMsg = document.getElementById('ttMsg');
+const ttStatusRows = document.getElementById('ttStatusRows');
 
 function msg(el, text, kind) {
   el.innerHTML = text ? `<div class="msg ${kind}">${text}</div>` : '';
@@ -110,6 +130,13 @@ async function refreshStatus() {
     <div class="row"><span class="k">Number of people</span><span class="v">${s.peopleCount}</span></div>
     <div class="row"><span class="k">Year</span><span class="v">${s.sheetYear || '—'}</span></div>
     <div class="row"><span class="k">Last updated</span><span class="v">${s.generatedAt ? new Date(s.generatedAt).toLocaleString('en-GB') : '—'}</span></div>
+  `;
+  const t = data.timetable;
+  ttStatusRows.innerHTML = `
+    <div class="row"><span class="k">Current data</span><span class="v">${fmtSource(t.source)}</span></div>
+    <div class="row"><span class="k">Ship</span><span class="v">${t.shipName || '—'}</span></div>
+    <div class="row"><span class="k">Cycle</span><span class="v">${t.cycleLength ? t.cycleLength + ' days, from ' + t.cycleStartIso : '—'}</span></div>
+    <div class="row"><span class="k">Last updated</span><span class="v">${t.uploadedAt ? new Date(t.uploadedAt).toLocaleString('en-GB') : '—'}</span></div>
   `;
 }
 
@@ -164,6 +191,37 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
     }
   } catch (err) {
     msg(panelMsg, 'Network error: ' + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Upload and update';
+  }
+});
+
+document.getElementById('ttUploadForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fileInput = document.getElementById('ttfile');
+  const btn = document.getElementById('ttUploadBtn');
+  msg(ttMsg, '', '');
+  if (!fileInput.files[0]) {
+    msg(ttMsg, 'Please choose a file.', 'err');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Uploading...';
+  try {
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    const res = await fetch('/api/admin/upload-timetable', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) {
+      msg(ttMsg, data.error || 'File upload failed.', 'err');
+    } else {
+      msg(ttMsg, `Updated: ${data.shipName}, ${data.cycleLength}-day cycle from ${data.cycleStartIso}.`, 'ok');
+      fileInput.value = '';
+      await refreshStatus();
+    }
+  } catch (err) {
+    msg(ttMsg, 'Network error: ' + err.message, 'err');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Upload and update';
