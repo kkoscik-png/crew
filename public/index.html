@@ -115,26 +115,24 @@
   .meta { color: var(--muted); font-size: 0.78rem; text-align: center; margin-top: 28px; line-height: 1.6; }
   .meta a { color: var(--accent-2); text-decoration: none; }
   .placeholder { color: var(--muted); text-align: center; padding: 30px 0; }
-  .cal-legend { display: flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--muted); margin-bottom: 8px; }
+  .cal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.74rem; color: var(--muted); margin-bottom: 10px; }
+  .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .cal-legend .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--onboard-bg); border: 1px solid var(--onboard); display: inline-block; }
-  .cal-months { max-width: 260px; margin: 0 auto; }
-  .cal-title { font-weight: 600; font-size: 0.8rem; margin: 14px 0 8px; color: var(--text); text-align: center; }
+  .cal-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .cal-title { font-weight: 600; font-size: 0.92rem; margin: 18px 0 10px; color: var(--text); text-align: center; }
   .cal-title:first-of-type { margin-top: 0; }
-  .cal-weekdays, .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-  .cal-weekdays { margin-bottom: 4px; }
-  .cal-weekdays div { text-align: center; font-size: 0.58rem; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+  .cal-weekdays, .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-weekdays { margin-bottom: 6px; }
+  .cal-weekdays div { text-align: center; font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
   .cal-cell {
     position: relative; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
-    border-radius: 6px; font-size: 0.66rem; color: var(--text); overflow: hidden;
+    border-top-left-radius: 8px; border-top-right-radius: 8px; font-size: 0.8rem; color: var(--text); overflow: hidden;
   }
   .cal-cell.empty { visibility: hidden; }
   .cal-cell.past { color: var(--muted); }
   .cal-cell.onboard { background: var(--onboard-bg); color: var(--onboard); font-weight: 700; }
   .cal-cell.today { box-shadow: 0 0 0 2px var(--accent) inset; font-weight: 700; }
-  .cal-cell .portbar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
-  .cal-legend2 { display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.68rem; color: var(--muted); margin-top: 10px; }
-  .cal-legend2 span { display: inline-flex; align-items: center; gap: 4px; }
-  .cal-legend2 i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .cal-cell .portbar { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; }
 </style>
 </head>
 <body>
@@ -195,10 +193,33 @@ function isOnboardDate(person, iso) {
   return person.intervals.some(iv => iso >= iv.start && iso <= iv.end);
 }
 
-// Look up the ship's day-plan for any date by projecting it onto the
-// repeating timetable cycle (works for dates before, inside, or long
-// after the cycle's anchor date).
+// Before the PDF timetable's cycle-start date, the ship ran a simple
+// single-port-per-day pattern that isn't in the PDF: confirmed anchor is
+// August 25, 2026 = Ventspils, alternating with Nynäshamn every day.
+// This is only known to hold for Aug 5 – Sep 5, 2026 (the day before the
+// PDF's cycle takes over on Sep 6).
+const PRE_CYCLE_START = '2026-08-05';
+const PRE_CYCLE_END = '2026-09-05';
+const PRE_CYCLE_ANCHOR_ISO = '2026-08-25'; // Ventspils
+
+function preCyclePortDay(iso) {
+  if (iso < PRE_CYCLE_START || iso > PRE_CYCLE_END) return null;
+  const [ay, am, ad] = PRE_CYCLE_ANCHOR_ISO.split('-').map(Number);
+  const [y, m, d] = iso.split('-').map(Number);
+  const anchor = Date.UTC(ay, am - 1, ad);
+  const cur = Date.UTC(y, m - 1, d);
+  const diff = Math.round((cur - anchor) / 86400000);
+  const isVentspils = ((diff % 2) + 2) % 2 === 0;
+  return isVentspils ? { v: ['00:00', '23:59'] } : { n: ['00:00', '23:59'] };
+}
+
+// Look up the ship's day-plan for any date: the manual pre-cycle pattern
+// above for Aug 5 – Sep 5, 2026, otherwise projected onto the repeating
+// timetable cycle read from the PDF (works for dates inside or long after
+// the cycle's anchor date).
 function shipDayForDate(tt, iso) {
+  const pre = preCyclePortDay(iso);
+  if (pre) return pre;
   if (!tt || !tt.cycleStartIso || !tt.cycleDays || !tt.cycleDays.length) return null;
   const [sy, sm, sd] = tt.cycleStartIso.split('-').map(Number);
   const [y, m, d] = iso.split('-').map(Number);
@@ -210,12 +231,26 @@ function shipDayForDate(tt, iso) {
   return tt.cycleDays[idx];
 }
 
+function timeToMins(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t || '');
+  return m ? (+m[1]) * 60 + (+m[2]) : null;
+}
+
 // Bottom-of-tile port bar: solid green if only Ventspils that day, solid red
-// if only Nynäshamn, 50/50 split if the ship calls at both ports that day.
+// if only Nynäshamn. If the ship calls at both ports that day, split the bar
+// 50/50 in chronological order — whichever port it's at in the morning goes
+// on the left, the port it moves to later goes on the right.
 function portBarStyle(day) {
   if (!day) return null;
   const hasV = !!day.v, hasN = !!day.n;
-  if (hasV && hasN) return 'background: linear-gradient(to right, var(--port-v) 50%, var(--port-n) 50%);';
+  if (hasV && hasN) {
+    const vArr = timeToMins(day.v[0]);
+    const nArr = timeToMins(day.n[0]);
+    const vFirst = vArr === null || nArr === null ? true : vArr <= nArr;
+    return vFirst
+      ? 'background: linear-gradient(to right, var(--port-v) 50%, var(--port-n) 50%);'
+      : 'background: linear-gradient(to right, var(--port-n) 50%, var(--port-v) 50%);';
+  }
   if (hasV) return 'background: var(--port-v);';
   if (hasN) return 'background: var(--port-n);';
   return null;
@@ -225,7 +260,12 @@ function renderCalendar(person) {
   const now = new Date();
   const todayStr = todayIso();
   let html = '<div class="card"><h2>Calendar — next 3 months</h2>';
-  html += '<div class="cal-legend"><span class="swatch"></span> On board</div>';
+  html += '<div class="cal-legend">' +
+    '<span><span class="swatch"></span>On board</span>' +
+    '<span><i style="background:var(--port-v)"></i>Ventspils</span>' +
+    '<span><i style="background:var(--port-n)"></i>Nynäshamn</span>' +
+    '<span><i style="background:linear-gradient(to right,var(--port-v) 50%,var(--port-n) 50%)"></i>Both ports</span>' +
+    '</div>';
   html += '<div class="cal-months">';
   for (let i = 0; i < 3; i++) {
     const y = now.getFullYear();
@@ -253,11 +293,6 @@ function renderCalendar(person) {
     html += '</div>';
   }
   html += '</div>'; // .cal-months
-  html += '<div class="cal-legend2">' +
-    '<span><i style="background:var(--port-v)"></i>Ventspils</span>' +
-    '<span><i style="background:var(--port-n)"></i>Nynäshamn</span>' +
-    '<span><i style="background:linear-gradient(to right,var(--port-v) 50%,var(--port-n) 50%)"></i>Both ports</span>' +
-    '</div>';
   html += '</div>'; // .card
   return html;
 }
