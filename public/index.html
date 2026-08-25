@@ -18,6 +18,8 @@
     --onboard-bg: #e6f6ec;
     --home: #a15c00;
     --home-bg: #fff2e0;
+    --port-v: #189752;
+    --port-n: #d1382c;
     --shadow: 0 1px 3px rgba(20,30,40,0.08), 0 1px 2px rgba(20,30,40,0.06);
   }
   @media (prefers-color-scheme: dark) {
@@ -33,6 +35,8 @@
       --onboard-bg: #123322;
       --home: #f5b155;
       --home-bg: #33270f;
+      --port-v: #2fbf71;
+      --port-n: #f0574a;
       --shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
   }
@@ -51,7 +55,15 @@
     margin: 0 0 4px;
     color: var(--accent);
   }
-  .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0 0 24px; }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0 0 16px; }
+  .nav-row { margin-bottom: 20px; }
+  .navbtn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.85rem; font-weight: 600; text-decoration: none;
+    color: var(--accent); background: var(--card); border: 1px solid var(--border);
+    padding: 9px 14px; border-radius: 10px; box-shadow: var(--shadow);
+  }
+  .navbtn:hover { border-color: var(--accent); }
   .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -111,17 +123,26 @@
   .cal-weekdays, .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
   .cal-weekdays { margin-bottom: 4px; }
   .cal-weekdays div { text-align: center; font-size: 0.58rem; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
-  .cal-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 0.66rem; color: var(--text); }
+  .cal-cell {
+    position: relative; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    border-radius: 6px; font-size: 0.66rem; color: var(--text); overflow: hidden;
+  }
   .cal-cell.empty { visibility: hidden; }
   .cal-cell.past { color: var(--muted); }
   .cal-cell.onboard { background: var(--onboard-bg); color: var(--onboard); font-weight: 700; }
   .cal-cell.today { box-shadow: 0 0 0 2px var(--accent) inset; font-weight: 700; }
+  .cal-cell .portbar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+  .cal-legend2 { display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.68rem; color: var(--muted); margin-top: 10px; }
+  .cal-legend2 span { display: inline-flex; align-items: center; gap: 4px; }
+  .cal-legend2 i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Crew Rotation Schedule</h1>
   <p class="subtitle">Stena Scandica — select your name to see your next crew change.</p>
+
+  <div class="nav-row"><a class="navbtn" href="/timetable">🚢 Ship timetable</a></div>
 
   <div class="card">
     <label for="person">Name</label>
@@ -174,6 +195,32 @@ function isOnboardDate(person, iso) {
   return person.intervals.some(iv => iso >= iv.start && iso <= iv.end);
 }
 
+// Look up the ship's day-plan for any date by projecting it onto the
+// repeating timetable cycle (works for dates before, inside, or long
+// after the cycle's anchor date).
+function shipDayForDate(tt, iso) {
+  if (!tt || !tt.cycleStartIso || !tt.cycleDays || !tt.cycleDays.length) return null;
+  const [sy, sm, sd] = tt.cycleStartIso.split('-').map(Number);
+  const [y, m, d] = iso.split('-').map(Number);
+  const start = Date.UTC(sy, sm - 1, sd);
+  const cur = Date.UTC(y, m - 1, d);
+  const diff = Math.round((cur - start) / 86400000);
+  const L = tt.cycleDays.length;
+  const idx = ((diff % L) + L) % L;
+  return tt.cycleDays[idx];
+}
+
+// Bottom-of-tile port bar: solid green if only Ventspils that day, solid red
+// if only Nynäshamn, 50/50 split if the ship calls at both ports that day.
+function portBarStyle(day) {
+  if (!day) return null;
+  const hasV = !!day.v, hasN = !!day.n;
+  if (hasV && hasN) return 'background: linear-gradient(to right, var(--port-v) 50%, var(--port-n) 50%);';
+  if (hasV) return 'background: var(--port-v);';
+  if (hasN) return 'background: var(--port-n);';
+  return null;
+}
+
 function renderCalendar(person) {
   const now = new Date();
   const todayStr = todayIso();
@@ -199,11 +246,18 @@ function renderCalendar(person) {
       if (isOnboardDate(person, iso)) classes.push('onboard');
       if (iso === todayStr) classes.push('today');
       if (iso < todayStr) classes.push('past');
-      html += `<div class="${classes.join(' ')}">${day}</div>`;
+      const barStyle = portBarStyle(shipDayForDate(TIMETABLE, iso));
+      const bar = barStyle ? `<span class="portbar" style="${barStyle}"></span>` : '';
+      html += `<div class="${classes.join(' ')}">${day}${bar}</div>`;
     }
     html += '</div>';
   }
   html += '</div>'; // .cal-months
+  html += '<div class="cal-legend2">' +
+    '<span><i style="background:var(--port-v)"></i>Ventspils</span>' +
+    '<span><i style="background:var(--port-n)"></i>Nynäshamn</span>' +
+    '<span><i style="background:linear-gradient(to right,var(--port-v) 50%,var(--port-n) 50%)"></i>Both ports</span>' +
+    '</div>';
   html += '</div>'; // .card
   return html;
 }
@@ -236,10 +290,12 @@ function computeStatus(person, todayIsoStr) {
 }
 
 let SCHEDULE = null;
+let TIMETABLE = null;
 
 async function load() {
-  const res = await fetch('/api/schedule');
+  const [res, ttRes] = await Promise.all([fetch('/api/schedule'), fetch('/api/timetable')]);
   SCHEDULE = await res.json();
+  TIMETABLE = await ttRes.json();
   const select = document.getElementById('person');
   for (const p of SCHEDULE.people) {
     const opt = document.createElement('option');
