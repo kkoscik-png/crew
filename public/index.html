@@ -103,6 +103,18 @@
   .meta { color: var(--muted); font-size: 0.78rem; text-align: center; margin-top: 28px; line-height: 1.6; }
   .meta a { color: var(--accent-2); text-decoration: none; }
   .placeholder { color: var(--muted); text-align: center; padding: 30px 0; }
+  .cal-legend { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--muted); margin-bottom: 10px; }
+  .cal-legend .swatch { width: 12px; height: 12px; border-radius: 4px; background: var(--onboard-bg); border: 1px solid var(--onboard); display: inline-block; }
+  .cal-title { font-weight: 600; font-size: 0.92rem; margin: 18px 0 10px; color: var(--text); }
+  .cal-title:first-of-type { margin-top: 0; }
+  .cal-weekdays, .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-weekdays { margin-bottom: 6px; }
+  .cal-weekdays div { text-align: center; font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+  .cal-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 0.8rem; color: var(--text); }
+  .cal-cell.empty { visibility: hidden; }
+  .cal-cell.past { color: var(--muted); }
+  .cal-cell.onboard { background: var(--onboard-bg); color: var(--onboard); font-weight: 700; }
+  .cal-cell.today { box-shadow: 0 0 0 2px var(--accent) inset; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -149,6 +161,48 @@ function addDays(iso, n) {
   const mm = String(dt.getMonth()+1).padStart(2,'0');
   const dd = String(dt.getDate()).padStart(2,'0');
   return `${yy}-${mm}-${dd}`;
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function isoYMD(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
+function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+// Monday-first weekday index (0 = Monday ... 6 = Sunday)
+function firstWeekdayMonFirst(y, m) { return (new Date(y, m, 1).getDay() + 6) % 7; }
+
+function isOnboardDate(person, iso) {
+  return person.intervals.some(iv => iso >= iv.start && iso <= iv.end);
+}
+
+function renderCalendar(person) {
+  const now = new Date();
+  const todayStr = todayIso();
+  let html = '<div class="card"><h2>Calendar — next 3 months</h2>';
+  html += '<div class="cal-legend"><span class="swatch"></span> On board</div>';
+  for (let i = 0; i < 3; i++) {
+    const y = now.getFullYear();
+    const m = now.getMonth() + i;
+    const dt = new Date(y, m, 1);
+    const dy = dt.getFullYear();
+    const dm = dt.getMonth();
+    const dim = daysInMonth(dy, dm);
+    const lead = firstWeekdayMonFirst(dy, dm);
+
+    html += `<div class="cal-title">${MONTHS[dm]} ${dy}</div>`;
+    html += '<div class="cal-weekdays"><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div><div>Su</div></div>';
+    html += '<div class="cal-days">';
+    for (let k = 0; k < lead; k++) html += '<div class="cal-cell empty"></div>';
+    for (let day = 1; day <= dim; day++) {
+      const iso = isoYMD(dy, dm, day);
+      const classes = ['cal-cell'];
+      if (isOnboardDate(person, iso)) classes.push('onboard');
+      if (iso === todayStr) classes.push('today');
+      if (iso < todayStr) classes.push('past');
+      html += `<div class="${classes.join(' ')}">${day}</div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
 }
 
 function computeStatus(person, todayIsoStr) {
@@ -246,6 +300,8 @@ function render() {
     html += '<div class="empty">No further scheduled changes until year end.</div>';
   }
   html += '</div>';
+
+  html += renderCalendar(person);
 
   result.innerHTML = html;
 }
