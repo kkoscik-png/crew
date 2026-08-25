@@ -3,18 +3,21 @@
 A Cloudflare Workers app that:
 
 - reads data from the **Planning** sheet of an Excel file (who works on board, and when),
-- lets you pick your name from a dropdown and shows whether you're currently on the ship or at home, when your next rotation is, and a list of every upcoming rotation until the end of the year,
-- has an admin panel (`/admin`, password-protected) for uploading a new Excel file — once uploaded, the schedule is recalculated and saved automatically.
+- lets you pick your name from a dropdown and shows whether you're currently on the ship or at home, when your next rotation is, and a list of every upcoming rotation until the end of the year, plus a 3-month calendar with a green/red bar under each day showing which port the ship is in,
+- reads the ship's PDF timetable (Stena Line SNV format) and shows a full "Ship timetable" page (`/timetable`) projecting the port schedule forward to the end of the year,
+- has an admin panel (`/admin`, password-protected) for uploading a new Excel file and/or a new timetable PDF — once uploaded, everything recalculates and saves automatically.
 
-The initial data (from the file you sent me) is already baked into `public/seed.json`, so the app works right after deployment, even before you upload anything through the admin panel.
+The initial data (from the files you sent me) is already baked into `public/seed.json` and `public/timetable-seed.json`, so the app works right after deployment, even before you upload anything through the admin panel.
 
 ## How it's built
 
-- `src/worker.js` — the Cloudflare Worker: serves `/api/schedule` (public data), `/api/admin/login`, `/api/admin/upload`, `/api/admin/status`.
+- `src/worker.js` — the Cloudflare Worker: serves `/api/schedule`, `/api/timetable` (public data), `/api/admin/login`, `/api/admin/upload`, `/api/admin/upload-timetable`, `/api/admin/status`.
 - `src/parse.js` — logic for reading the "Planning" sheet and computing on-board periods.
-- `public/index.html` — the main page with the dropdown.
-- `public/admin.html` — the admin panel (password login + Excel upload).
-- `public/seed.json` — data generated from your original file (used as the starting point).
+- `src/timetable.js` — logic for reading the PDF timetable (by text position, not reading order — see below) and building a repeating port-call cycle.
+- `public/index.html` — the main page with the dropdown and 3-month calendar.
+- `public/timetable.html` — the "Ship timetable" page.
+- `public/admin.html` — the admin panel (password login + Excel/PDF upload).
+- `public/seed.json` / `public/timetable-seed.json` — data generated from your original files (used as the starting point).
 
 ### How "on board" / "at home" is determined
 
@@ -25,6 +28,14 @@ A blank cell, `T` (Travel Day), `LA`, `P`, `L`, `V`, `CT` = the person is not on
 Consecutive days with a working code are grouped into a "rotation" (interval). If today falls inside such an interval, the person is "on board", and the day they go home is the **last marked working day itself** (not the day after). If today falls outside any interval, the app shows the next upcoming rotation (boarding date and the date they go home again), plus a table of every later rotation until the end of the year.
 
 If you ever want to change this logic (e.g. treat "T" differently), the `ONBOARD_CODES` set in `src/parse.js` is the single place that decides it.
+
+### How the ship timetable is read from the PDF
+
+The Stena Line SNV timetable PDF lists **two ships** (Stena Scandica and Stena Baltica) side by side, alternating week to week. `src/timetable.js` reads the PDF's text by its on-page x/y position (not reading order, which interleaves the two ships) to reconstruct the table, then keeps only the **Stena Scandica** columns for both ports. It detects the cycle length automatically (currently 14 days: an odd week + an even week) by finding where the pattern repeats, and reads the start date from the "timetable from ..." line — so it isn't hardcoded to this specific PDF's dates or cycle length, only to the general Stena Line table layout (ship name headers above "Arrival / Depart." column pairs, two port blocks side by side). This was verified to match, day-for-day, a version of this same schedule that had been manually cross-checked against the official PDF.
+
+Once the cycle is known, any date's port schedule is found by projecting it onto the cycle (`date − start, mod cycle length`) — this is what both `/timetable` and the port bar in the crew calendar use, so a date far in the future (or slightly before the PDF's stated start) still gets a plausible answer.
+
+If a future timetable ever covers a **different ship** than Stena Scandica, or the PDF layout changes significantly, `src/timetable.js` is the only file that needs updating — the default ship name it looks for is set where `parseTimetableItems` is called in `src/worker.js` (and in `scripts/generate-timetable-seed.mjs`).
 
 ## Requirements
 
