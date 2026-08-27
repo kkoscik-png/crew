@@ -149,6 +149,24 @@ function parseWorkbook(XLSX, wb) {
       intervals.push({ start: curStart, end: prevDate });
     }
 
+    // Collapse into contiguous Vacation ("V") intervals, same way.
+    const vacationIntervals = [];
+    let vacStart = null;
+    prevDate = null;
+    for (const date of allDates) {
+      const isVacation = codes.get(date) === 'V';
+      if (isVacation && vacStart === null) {
+        vacStart = date;
+      } else if (!isVacation && vacStart !== null) {
+        vacationIntervals.push({ start: vacStart, end: prevDate });
+        vacStart = null;
+      }
+      prevDate = date;
+    }
+    if (vacStart !== null) {
+      vacationIntervals.push({ start: vacStart, end: prevDate });
+    }
+
     let displayName = name;
     if (seenNames.has(name)) {
       const n = seenNames.get(name) + 1;
@@ -164,6 +182,7 @@ function parseWorkbook(XLSX, wb) {
       name: displayName,
       sourceRow: r + 1, // 1-indexed, matches Excel row numbers
       intervals,
+      vacationIntervals,
     });
   }
 
