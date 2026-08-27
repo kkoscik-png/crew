@@ -20,6 +20,8 @@
     --home-bg: #fff2e0;
     --port-v: #189752;
     --port-n: #d1382c;
+    --vacation: #a1780a;
+    --vacation-bg: #fff4d6;
     --shadow: 0 1px 3px rgba(20,30,40,0.08), 0 1px 2px rgba(20,30,40,0.06);
   }
   @media (prefers-color-scheme: dark) {
@@ -37,6 +39,8 @@
       --home-bg: #33270f;
       --port-v: #2fbf71;
       --port-n: #f0574a;
+      --vacation: #f0c33e;
+      --vacation-bg: #3a2e0a;
       --shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
   }
@@ -118,6 +122,7 @@
   .cal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.74rem; color: var(--muted); margin-bottom: 10px; }
   .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .cal-legend .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--onboard-bg); border: 1px solid var(--onboard); display: inline-block; }
+  .cal-legend .swatch.vacation { background: var(--vacation-bg); border-color: var(--vacation); }
   .cal-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
   .cal-title { font-weight: 600; font-size: 0.92rem; margin: 18px 0 10px; color: var(--text); text-align: center; }
   .cal-title:first-of-type { margin-top: 0; }
@@ -131,8 +136,14 @@
   .cal-cell.empty { visibility: hidden; }
   .cal-cell.past { color: var(--muted); }
   .cal-cell.onboard { background: var(--onboard-bg); color: var(--onboard); font-weight: 700; }
+  .cal-cell.vacation { background: var(--vacation-bg); color: var(--vacation); font-weight: 700; }
   .cal-cell.today { box-shadow: 0 0 0 2px var(--accent) inset; font-weight: 700; }
   .cal-cell .portbar { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; }
+  .cal-cell .vac-label {
+    position: absolute; left: 0; right: 0; bottom: 6px;
+    font-size: 0.36rem; font-weight: 700; letter-spacing: .01em; text-transform: uppercase;
+    text-align: center; line-height: 1.3; color: var(--vacation);
+  }
 </style>
 </head>
 <body>
@@ -191,6 +202,11 @@ function firstWeekdayMonFirst(y, m) { return (new Date(y, m, 1).getDay() + 6) % 
 
 function isOnboardDate(person, iso) {
   return person.intervals.some(iv => iso >= iv.start && iso <= iv.end);
+}
+
+// "V" in the Planning sheet = Vacation.
+function isVacationDate(person, iso) {
+  return (person.vacationIntervals || []).some(iv => iso >= iv.start && iso <= iv.end);
 }
 
 // Before the PDF timetable's cycle-start date, the ship ran a simple
@@ -262,6 +278,7 @@ function renderCalendar(person) {
   let html = '<div class="card"><h2>Calendar — next 3 months</h2>';
   html += '<div class="cal-legend">' +
     '<span><span class="swatch"></span>On board</span>' +
+    '<span><span class="swatch vacation"></span>Vacation</span>' +
     '<span><i style="background:var(--port-v)"></i>Ventspils</span>' +
     '<span><i style="background:var(--port-n)"></i>Nynäshamn</span>' +
     '<span><i style="background:linear-gradient(to right,var(--port-v) 50%,var(--port-n) 50%)"></i>Both ports</span>' +
@@ -282,13 +299,16 @@ function renderCalendar(person) {
     for (let k = 0; k < lead; k++) html += '<div class="cal-cell empty"></div>';
     for (let day = 1; day <= dim; day++) {
       const iso = isoYMD(dy, dm, day);
+      const isVac = isVacationDate(person, iso);
       const classes = ['cal-cell'];
       if (isOnboardDate(person, iso)) classes.push('onboard');
+      if (isVac) classes.push('vacation');
       if (iso === todayStr) classes.push('today');
       if (iso < todayStr) classes.push('past');
       const barStyle = portBarStyle(shipDayForDate(TIMETABLE, iso));
       const bar = barStyle ? `<span class="portbar" style="${barStyle}"></span>` : '';
-      html += `<div class="${classes.join(' ')}">${day}${bar}</div>`;
+      const vacLabel = isVac ? '<span class="vac-label">Vacation</span>' : '';
+      html += `<div class="${classes.join(' ')}">${day}${vacLabel}${bar}</div>`;
     }
     html += '</div>';
   }
